@@ -292,15 +292,19 @@ export async function apiClient(endpoint, options = {}, isRetry = false) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok || !data.success) {
-      const errorMessage = data.message || `Request failed with status ${response.status}`;
+      let errorMessage = data.message || `Request failed with status ${response.status}`;
+      if (typeof errorMessage === 'string' && (errorMessage.includes('prisma') || errorMessage.includes("Can't reach database"))) {
+        errorMessage = 'Database service is currently offline or unreachable.';
+      }
+
       const error = new Error(errorMessage);
       error.status = response.status;
       error.data = data;
 
-      // Don't toast for silent auth checks, 401 unauthenticated, GET 404 fallbacks, or requests with skipToast: true
+      // Don't toast for silent auth checks, 401 unauthenticated, GET 404/503 fallbacks, or requests with skipToast: true
       const isGet = (options.method || 'GET').toUpperCase() === 'GET';
-      const isSilentCheck = options.skipToast || endpoint === '/auth/me' || response.status === 401 || (isGet && response.status === 404);
-      if (!isSilentCheck && data.message) {
+      const isSilentCheck = options.skipToast || endpoint === '/auth/me' || response.status === 401 || (isGet && (response.status === 404 || response.status === 503));
+      if (!isSilentCheck && errorMessage) {
         showToast(errorMessage, 'error');
       }
 
